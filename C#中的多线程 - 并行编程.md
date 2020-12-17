@@ -89,7 +89,7 @@ PLINQ 会自动并行化本地的 LINQ 查询。其优势在于使用简单，�
 
 使用 PLINQ 时，只要在输入序列上调用`AsParallel()`，然后像平常一样继续 LINQ 查询就可以了。下边的查询计算 3 到 100,000 内的素数，这会充分利用目标机器上的所有核心。
 
-```
+```c#
 // 使用一个简单的（未优化）算法计算素数。
 //
 // 注意：这一部分提供的所有代码都可以在 LINQPad 中试验。
@@ -112,7 +112,7 @@ int[] primes = parallelQuery.ToArray();
 
 对于那些接受两个输入序列的查询操作符（`Join`、`GroupJoin`、`Contact`、`Union`、`Intersect`和`Zip`）来说，必须在这两个输入序列上都使用`AsParallel()`（否则将抛出异常）。然而，不需要为中间过程的查询使用`AsParallel`，因为 PLINQ 的查询操作符会输出另一个`ParallelQuery`序列。实际上，在这个输出序列上再次调用`AsParallel`会降低效率，它会强制对序列进行合并和重新分区。
 
-```
+```c#
 mySequence.AsParallel()           // 使用 ParallelQuery<int> 封装序列
           .Where (n => n > 100)   // 输出另一个 ParallelQuery<int>
           .AsParallel()           // 不需要，会降低效率！
@@ -153,7 +153,7 @@ PLINQ 仅适用于本地集合：它无法在 LINQ to SQL 或 Entity Framework �
 
 如果你需要保持序列顺序，可以通过在`AsParallel`后调用`AsOrdered()`来强制它保证：
 
-```
+```c#
 myCollection.AsParallel().AsOrdered()...
 ```
 
@@ -161,7 +161,7 @@ myCollection.AsParallel().AsOrdered()...
 
 之后你可以通过调用`AsUnordered`来取消`AsOrdered`的效果：这会引入一个“随机洗牌点（random shuffle point）”，允许查询从这个点开始更高效的执行。因此，如果你希望仅为前两个查询操作保持输入序列的顺序，可以这样做：
 
-```
+```c#
 inputSequence.AsParallel().AsOrdered()
   .QueryOperator1()
   .QueryOperator2()
@@ -201,7 +201,7 @@ inputSequence.AsParallel().AsOrdered()
 
 第一步是下载英文单词字典，为了能够高效查找，将其放在一个`HashSet`中：
 
-```
+```c#
 if (!File.Exists ("WordLookup.txt"))    // 包含约 150,000 个单词
   new WebClient().DownloadFile (
     "http://www.albahari.com/ispell/allwords.txt", "WordLookup.txt");
@@ -213,7 +213,7 @@ var wordLookup = new HashSet<string> (
 
 然后，使用`wordLookup`来创建一个测试“文档”，该“文档”是个包含了一百万个随机单词的数组。创建完数组后，引入两个拼写错误：
 
-```
+```c#
 var random = new Random();
 string[] wordList = wordLookup.ToArray();
 
@@ -227,7 +227,7 @@ wordsToTest [23456] = "wubsie";     // 拼写错误
 
 现在，通过对比`wordLookup`检查`wordsToTest`，来完成这个并行的拼写检查程序。PLINQ 让这变得很简单：
 
-```
+```c#
 var query = wordsToTest
   .AsParallel()
   .Select  ((word, index) => new IndexedWord { Word=word, Index=index })
@@ -245,7 +245,7 @@ query.Dump();     // 在 LINQPad 中显示输出
 
 `IndexedWord`是一个自定义的结构体，定义如下：
 
-```
+```c#
 struct IndexedWord { public string Word; public int Index; }
 ```
 
@@ -259,7 +259,7 @@ struct IndexedWord { public string Word; public int Index; }
 
 来扩展一下我们的例子，让创建随机测试单词列表的过程并行化。我们把它作为 LINQ 查询来构造，这样事情就简单多了。以下是顺序执行版本：
 
-```
+```c#
 string[] wordsToTest = Enumerable.Range (0, 1000000)
   .Select (i => wordList [random.Next (0, wordList.Length)])
   .ToArray();
@@ -267,7 +267,7 @@ string[] wordsToTest = Enumerable.Range (0, 1000000)
 
 不幸的是，对`Random.Next`的调用不是线程安全的，所以实现并行化不是向查询语句直接插入`AsParallel()`这么简单。一个可能的解决办法是写个方法对`random.Next`加锁，然而这会限制并发能力。更好的处理办法是使用[`ThreadLocal`](https://blog.gkarch.com/threading/part3.html#thread-local-storage)为每个线程创建独立的`Random`对象。然后我们可以使用如下代码来并行化查询：
 
-```
+```c#
 var localRandom = new ThreadLocal<Random>
  ( () => new Random (Guid.NewGuid().GetHashCode()) );
 
@@ -292,7 +292,7 @@ PLINQ 非常适合于“不好意思不并行的问题（embarrassingly parallel
 
 因为 PLINQ 会在并行的线程上运行查询，因此必须注意不要执行非线程安全的操作。特别需要注意，对变量进行写操作有副作用（side-effecting），是非线程安全的。
 
-```
+```c#
 // 下列查询将每个元素与其索引相乘。
 // 给定一个 0 到 999 的输入序列, 它应该输出元素的平方。
 int i = 0;
@@ -303,7 +303,7 @@ var query = from n in Enumerable.Range(0,999).AsParallel() select n * i++;
 
 替代方法是将这个查询重写，使用带索引的`Select`版本。
 
-```
+```c#
 var query = Enumerable.Range(0,999).AsParallel().Select ((n, i) => n * i);
 ```
 
@@ -313,7 +313,7 @@ var query = Enumerable.Range(0,999).AsParallel().Select ((n, i) => n * i);
 
 有时一个查询的长时间运行并不是因为是 CPU 密集型操作，而是因为它在等待某些东西，例如等待网页下载或是硬件的响应。PLINQ 能够有效地并行化这种类型的查询，可以通过在`AsParallel`后调用`WithDegreeOfParallelism`来提示这种特征。例如，假设我们希望同时 ping 6 个网站。比起使用[异步委托](https://blog.gkarch.com/threading/part1.html#asynchronous-delegates)或手动让 6 个线程自旋，使用 PLINQ 查询可以轻松实现它：
 
-```
+```c#
 from site in new[]
 {
   "www.albahari.com",
@@ -339,7 +339,7 @@ select new
 
 再给一个例子：假设我们要实现一个监控系统，希望它不断将来自 4 个安全摄像头的图像合并成一个图像，并在闭路电视上显示。使用下边的类来表示一个摄像头：
 
-```
+```c#
 class Camera
 {
   public readonly int CameraID;
@@ -356,7 +356,7 @@ class Camera
 
 要获取一个合成图像，我们必须分别在 4 个摄像头对象上调用`GetNextFrame`。假设操作主要是受 I/O 影响的，通过并行化我们能将帧率提升 4 倍，即使是在单核机器上。PLINQ 使用一小段程序就能实现它：
 
-```
+```c#
 Camera[] cameras = Enumerable.Range (0, 4)    // 创建 4 个摄像头对象
   .Select (i => new Camera (i))
   .ToArray();
@@ -379,7 +379,7 @@ while (true)
 
 在一个 PLINQ 查询内，仅能够调用`WithDegreeOfParallelism`一次。如果你需要再次调用它，必须在查询中通过再次调用`AsParallel()`强制进行查询的合并和重新分区：
 
-```
+```c#
 "The Quick Brown Fox"
   .AsParallel().WithDegreeOfParallelism (2)
   .Where (c => !char.IsWhiteSpace (c))
@@ -393,7 +393,7 @@ while (true)
 
 对于结束一个使用转换、取元素或聚合操作符的查询来说，你可以在其它线程使用[取消标记](https://blog.gkarch.com/threading/part3.html#cancellation-tokens)来取消它。在`AsParallel`后调用`WithCancellation`来添加一个标记，并把`CancellationTokenSource`对象的`Token`属性作为参数传递。之后另一个线程就可以在这个`CancellationTokenSource`对象上调用`Cancel`，它会在查询的使用方那边抛出`OperationCanceledException`异常。
 
-```
+```c#
 IEnumerable<int> million = Enumerable.Range (3, 1000000);
 
 var cancelSource = new CancellationTokenSource();
@@ -427,7 +427,7 @@ PLINQ 不会直接中止线程，因为[这么做是危险的](https://blog.gkar
 
 PLINQ 的一个优点是它能够很容易地将并行化任务的结果整理成一个输出序列。然而有时，最终要做的是在输出序列的每个元素上运行一些方法：
 
-```
+```c#
 foreach (int n in parallelQuery)
   DoSomething (n);
 ```
@@ -436,7 +436,7 @@ foreach (int n in parallelQuery)
 
 `ForAll`方法在`ParallelQuery`的每个输出元素上运行一个委托。它直接挂钩（hook）到 PLINQ 内部，绕过整理和枚举结果的步骤。举个栗子：
 
-```
+```c#
 "abcdef".AsParallel().Select (c => char.ToUpper(c)).ForAll (Console.Write);
 ```
 
@@ -472,7 +472,7 @@ PLINQ 有 3 种分区策略，用来分配输入元素到线程：
 
 如果想强制使用块分区，就通过调用`Partitioner.Create`（在命名空间`System.Collection.Concurrent`中）来封装输入序列，例如：
 
-```
+```c#
 int[] numbers = { 3, 4, 5, 6, 7, 8, 9 };
 var parallelQuery =
   Partitioner.Create (numbers, true).AsParallel()
@@ -487,7 +487,7 @@ var parallelQuery =
 
 范围分区会绕过正常的输入端枚举，并且为每个工作线程预分配相同数量的元素，避免了在输入序列上的竞争。但是如果某些线程拿到了容易的元素并很早就完成了处理，在其它工作线程仍在继续工作的时候它就会是空闲的。我们之前的素数计算的例子在使用范围分区时就性能不高。举个范围分区适用的例子，计算 1000 万以内数字的平方和：
 
-```
+```c#
 ParallelEnumerable.Range (1, 10000000).Sum (i => Math.Sqrt (i))
 ```
 
@@ -501,7 +501,7 @@ PLINQ 可以在无需额外干预的情况下有效地并行化`Sum`、`Average`
 
 如果不熟悉`Aggregate`操作符，你可以认为它就是一个`Sum`、`Average`、`Min`和`Max`的泛化版本，换句话说，就是一个可以使你通过自定义的聚合算法实现非通常聚合操作的操作符。如下代码展现了`Aggregate`如何实现`Sum`操作符的工作：
 
-```
+```c#
 int[] numbers = { 1, 2, 3 };
 int sum = numbers.Aggregate (0, (total, n) => total + n);   // 6
 ```
@@ -514,14 +514,14 @@ int sum = numbers.Aggregate (0, (total, n) => total + n);   // 6
 
 调用`Aggregate`时可以省略种子值，这种情况下第一个元素会被隐式当作种子，之后聚合处理会从第二个元素开始进行。下边是一个无种子的例子：
 
-```
+```c#
 int[] numbers = { 1, 2, 3 };
 int sum = numbers.Aggregate ((total, n) => total + n);   // 6
 ```
 
 这得到了与之前相同的结果，然而实际上却是进行了不同的计算。之前例子计算的是 `0+1+2+3`，而现在计算的是`1+2+3`。通过乘法运算来代替加法运算能够更好地说明这个不同：
 
-```
+```c#
 int[] numbers = { 1, 2, 3 };
 int x = numbers.Aggregate (0, (prod, n) => prod * n);   // 0*1*2*3 = 0
 int y = numbers.Aggregate (   (prod, n) => prod * n);   //   1*2*3 = 6
@@ -529,85 +529,83 @@ int y = numbers.Aggregate (   (prod, n) => prod * n);   //   1*2*3 = 6
 
 如同我们马上将要看到的，无种子的聚合的优点在于被并行化时不需要使用特殊的重载。然而，无种子的聚合存在一个陷阱：无种子的聚合方法期望使用的委托中的计算应满足交换律和结合律。如果用在别的情况下，结果要不然是反直觉的（普通查询），要不然是不确定的（PLINQ 并行化查询）。例如考虑如下函数：
 
-```
+```c#
 (total, n) => total + n * n
 ```
 
 它既不满足交换律也不满足结合律。（例如：`1+2*2 != 2+1*1`）。我们来看一下使用它来对数字 2、3、4 计算平方和时会发生什么：
 
-```
+```c#
 int[] numbers = { 2, 3, 4 };
 int sum = numbers.Aggregate ((total, n) => total + n * n);    // 27
 ```
 
 本来的计算应该是：
 
-```
+```c#
 2*2 + 3*3 + 4*4    // 29
 ```
 
 但现在的计算是：
 
-```
+```c#
 2 + 3*3 + 4*4      // 27
 ```
 
 可以通过多种方法解决这个问题。首先，我们可以在序列最前端加入 0 作为第一个元素：
 
-```
+```c#
 int[] numbers = { 0, 2, 3, 4 };
 ```
 
 这不仅不优雅，而且在并行执行的情况下仍然会产生错误的结果，因为 PLINQ 会选择多个元素作为种子，这相当于假定了计算满足结合律。为说明这个问题，用如下方式表示我们的聚合函数：
 
-```
+```c#
 f(total, n) => total + n * n
 ```
 
 LINQ to Objects 会这样计算：
 
-```
+```c#
 f(f(f(0, 2),3),4)
 ```
 
 PLINQ 可能会这样计算：
 
-```
+```c#
 f(f(0,2),f(3,4))
 ```
 
 结果是：
 
-```
-第一个分区：   a = 0 + 2*2  (= 4)
-第二个分区：   b = 3 + 4*4  (= 19)
-最终结果：     a + b*b  (= 365)
-甚至可能是:    b + a*a  (= 35)
-```
+> 第一个分区：   a = 0 + 2 x 2  (= 4)
+> 第二个分区：   b = 3 + 4 x 4  (= 19)
+> 最终结果：     a + b x b  (= 365)
+> 甚至可能是:    b + a x a  (= 35)
 
 有两种好的解决方案：第一种是将其转换为有种子的聚合，使用 0 作为种子。这种方案带来的复杂度的提升仅仅是使用 PLINQ 时，我们需要使用特殊的重载，确保查询并行执行（马上会看到）。
 
 第二种解决方案是：重构查询，使聚合函数满足交换律和结合律：
 
-```
+```c#
 int sum = numbers.Select (n => n * n).Aggregate ((total, n) => total + n);
 ```
 
 当然，在这种简单的场景下你可以（并且应该）使用`Sum`操作符来代替`Aggregate`：
 
-```
+```c#
 int sum = numbers.Sum (n => n * n);
 ```
 
 实际上可以更进一步使用`Sum`和`Average`。例如，可以使用`Average`来计算均方根（root-mean-square）：
 
-```
+```c#
 Math.Sqrt (numbers.Average (n => n * n))
 ```
 
 甚至是标准差：
 
-```
+```c#
 double mean = numbers.Average();
 double sdev = Math.Sqrt (numbers.Average (n =>
               {
@@ -639,7 +637,7 @@ double sdev = Math.Sqrt (numbers.Average (n =>
 
 提供一个简单的例子，下边的代码对`numbers`数组中的值进行求和：
 
-```
+```c#
 numbers.AsParallel().Aggregate (
   () => 0,                                     // 种子工厂
   (localTotal, n) => localTotal + n,           // 更新累加器方法
@@ -649,7 +647,7 @@ numbers.AsParallel().Aggregate (
 
 这个例子有些刻意，我们可以使用更简单的方式获取相同的结果（例如无种子的聚合，或者更好的选择是使用`Sum`操作符）。给一个更加实际的例子，假设我们要计算字符串中每个英文字母的出现频率。简单的顺序执行方案看起来是这样：
 
-```
+```c#
 string text = "Let’s suppose this is a really long string";
 var letterFrequencies = new int[26];
 foreach (char c in text)
@@ -665,7 +663,7 @@ foreach (char c in text)
 
 `Aggregate`提供了一个好的解决方案。这种情况下，累加器是一个数组，就像是之前例子中`letterFrequencies`数组。使用`Aggregate`的顺序执行版本如下：
 
-```
+```c#
 int[] result =
   text.Aggregate (
     new int[26],                // 创建“累加器”
@@ -679,7 +677,7 @@ int[] result =
 
 下面是并行版本，它使用 PLINQ 的专门重载：
 
-```
+```c#
 int[] result =
   text.AsParallel().Aggregate (
     () => new int[26],             // 新建局部累加器
@@ -722,13 +720,13 @@ PFX 通过`Parallel`类上的三个静态方法提供了结构化并行的基本
 
 `Parallel.Invoke`并行执行一组`Action`类型的委托，然后等待它们完成。这个方法最简单的版本如下：
 
-```
+```c#
 public static void Invoke (params Action[] actions);
 ```
 
 下面是使用`Parallel.Invoke`来同时下载两个网页：
 
-```
+```c#
 Parallel.Invoke (
  () => new WebClient().DownloadFile ("http://www.linqpad.net", "lp.html"),
  () => new WebClient().DownloadFile ("http://www.jaoo.dk", "jaoo.html"));
@@ -738,7 +736,7 @@ Parallel.Invoke (
 
 使用`Parallel`上的所有方法时，都需要自行实现整理结果的代码。这意味着你需要注意[线程安全](https://blog.gkarch.com/threading/part2.html#thread-safety)。例如，下面的代码不是线程安全的：
 
-```
+```c#
 var data = new List<string>();
 Parallel.Invoke (
  () => data.Add (new WebClient().DownloadString ("http://www.foo.com")),
@@ -749,7 +747,7 @@ Parallel.Invoke (
 
 `Parallel.Invoke`也有接受`ParallelOptions`对象的重载：
 
-```
+```c#
 public static void Invoke (ParallelOptions options,
                            params Action[] actions);
 ```
@@ -760,7 +758,7 @@ public static void Invoke (ParallelOptions options,
 
 `Parallel.For`和`Parallel.ForEach`与 C# `for`和`foreach`类似，但会并行执行，而不是顺序执行。下面是它们（最简单的）方法签名：
 
-```
+```c#
 public static ParallelLoopResult For (
   int fromInclusive, int toExclusive, Action<int> body)
 
@@ -770,39 +768,39 @@ public static ParallelLoopResult ForEach<TSource> (
 
 对于下面的`for`循环：
 
-```
+```c#
 for (int i = 0; i < 100; i++)
   Foo (i);
 ```
 
 并行版本是这样：
 
-```
+```c#
 Parallel.For (0, 100, i => Foo (i));
 ```
 
 或更简洁的：
 
-```
+```c#
 Parallel.For (0, 100, Foo);
 ```
 
 而对于下面的`foreach`循环：
 
-```
+```c#
 foreach (char c in "Hello, world")
   Foo (c);
 ```
 
 并行版本是这样：
 
-```
+```c#
 Parallel.ForEach ("Hello, world", Foo);
 ```
 
 给一个实际点的例子。引入`System.Security.Cryptography`命名空间，然后我们可以像这样并行生成六组密钥对的字符串形式：
 
-```
+```c#
 var keyPairs = new string[6];
 
 Parallel.For (0, keyPairs.Length,
@@ -813,7 +811,7 @@ Parallel.For (0, keyPairs.Length,
 
 上面的例子也可以使用[PLINQ](https://blog.gkarch.com/threading/part5.html#plinq)来实现：
 
-```
+```c#
 string[] keyPairs =
   ParallelEnumerable.Range (0, 6)
   .Select (i => RSA.Create().ToXmlString (true))
@@ -824,7 +822,7 @@ string[] keyPairs =
 
 `Parallel.For`和`Parallel.ForEach`通常更适合用于外循环，而不是内循环。这是因为前者会带来更大的分区块，就稀释了管理并行的开销。一般没有必要同时并行内外循环。对于下面的例子，我们需要 100 个核心才能让内循环的并行有益处：
 
-```
+```c#
 Parallel.For (0, 100, i =>
 {
   Parallel.For (0, 50, j => Foo (i, j));   // 对于内循环，
@@ -835,7 +833,7 @@ Parallel.For (0, 100, i =>
 
 有时需要获知循环迭代的索引。在顺序的`foreach`中这很简单：
 
-```
+```c#
 int i = 0;
 foreach (char c in "Hello, world")
   Console.WriteLine (c.ToString() + i++);
@@ -850,7 +848,7 @@ public static ParallelLoopResult ForEach<TSource> (
 
 先忽略`ParallelLoopState`（下一节会讲）。现在我们关注的是`Action`的第三个`long`类型的参数，它代表了循环的索引：
 
-```
+```c#
 Parallel.ForEach ("Hello, world", (c, state, i) =>
 {
    Console.WriteLine (c.ToString() + i);
@@ -859,7 +857,7 @@ Parallel.ForEach ("Hello, world", (c, state, i) =>
 
 为了把它用到实际场景中，我们来回顾下[使用 PLINQ 的拼写检查](https://blog.gkarch.com/threading/part5.html#example-parallel-spellchecker)。下面的代码加载了一个字典，并生成了一个用来测试的数组，有一百万个测试项：
 
-```
+```c#
 if (!File.Exists ("WordLookup.txt"))    // 包含约 150,000 个单词
   new WebClient().DownloadFile (
     "http://www.albahari.com/ispell/allwords.txt", "WordLookup.txt");
@@ -881,7 +879,7 @@ wordsToTest [23456] = "wubsie";     // 拼写错误
 
 我们可以使用带索引的`Parallel.ForEach`来对`wordsToTest`数组进行拼写检查，如下：
 
-```
+```c#
 var misspellings = new ConcurrentBag<Tuple<int,string>>();
 
 Parallel.ForEach (wordsToTest, (word, state, i) =>
@@ -897,7 +895,7 @@ Parallel.ForEach (wordsToTest, (word, state, i) =>
 
 因为对于并行的`For`和`ForEach`循环，循环体是一个委托，所以就无法使用`break`语句来提前退出循环。在这里，你必须使用`ParallelLoopState`对象上的`Break`或`Stop`：
 
-```
+```c#
 public class ParallelLoopState
 {
   public void Break();
@@ -912,7 +910,7 @@ public class ParallelLoopState
 
 获取`ParallelLoopState`很容易：所有版本的`For`和`ForEach`都有重载可以接受`Action<TSource,ParallelLoopState>`类型的循环体。所以，如果要并行化：
 
-```
+```c#
 foreach (char c in "Hello, world")
   if (c == ',')
     break;
@@ -922,7 +920,7 @@ foreach (char c in "Hello, world")
 
 可以使用：
 
-```
+```c#
 Parallel.ForEach ("Hello, world", (c, loopState) =>
 {
   if (c == ',')
@@ -934,9 +932,7 @@ Parallel.ForEach ("Hello, world", (c, loopState) =>
 
 输出：
 
-```
-Hlloe
-```
+> Hlloe
 
 从结果中可以发现，循环体会以随机顺序完成。除这点不同以外，调用`Break`会给出与顺序循环至少相同数量的元素：在上例中总是以一定顺序至少输出 *H*、*e*、*l*、*l*、*o* 这几个字母。而如果改为调用`Stop`，会强制所有线程在当前迭代完成后立即结束。在上例中，如果有些线程滞后了，调用`Stop`可能给出 *H*、*e*、*l*、*l*、*o* 的子集。当发现已经找到了需要的东西时，或是发现出错了不想看结果的情况下，`Stop`比较适用。
 
@@ -954,7 +950,7 @@ Hlloe
 
 `Parallel.For`和`Parallel.ForEach`都提供了拥有`TLocal`泛型变量的重载。这是为了协助你优化密集迭代的循环中的数据整理工作。最简单的形式如下：
 
-```
+```c#
 public static ParallelLoopResult For <TLocal> (
   int fromInclusive,
   int toExclusive,
@@ -966,7 +962,7 @@ public static ParallelLoopResult For <TLocal> (
 
 本质上，问题在于：假设我们要计算从 1 到 10,000,000 的平方根的和。并行计算一千万个平方根很容易，但是求和是个问题，因为必须像这样加[锁](https://blog.gkarch.com/threading/part2.html#locking)才能更新和值：
 
-```
+```c#
 object locker = new object();
 double total = 0;
 Parallel.For (1, 10000000,
@@ -984,7 +980,7 @@ Parallel.For (1, 10000000,
 
 另外，循环体委托现在不能返回`void`，而是应该返回局部值新的聚合结果。下面是重构后的例子：
 
-```
+```c#
 object locker = new object();
 double grandTotal = 0;
 
@@ -1004,7 +1000,7 @@ Parallel.For (1, 10000000,
 
 前面说过，PLINQ 一般更适合这些场景。我们的例子如果使用 PLINQ 来并行会很简单：
 
-```
+```c#
 ParallelEnumerable.Range(1, 10000000)
                   .Sum (i => Math.Sqrt (i))
 ```
@@ -1050,13 +1046,13 @@ Visual Studio 2010 提供了一个新的窗口来监视任务（调试 | 窗口 
 
 如同我们在第 1 部分[线程池的讨论](https://blog.gkarch.com/threading/part1.html#thread-pooling)中那样，你可以调用`Task.Factory.StartNew`，并给它传递一个`Action`委托来创建并启动`Task`：
 
-```
+```c#
 Task.Factory.StartNew (() => Console.WriteLine ("Hello from a task!"));
 ```
 
 泛型的版本`Task<TResult>`（`Task`的子类）可以让你在任务结束时获得返回的数据：
 
-```
+```c#
 Task<string> task = Task.Factory.StartNew<string> (() =>    // 开始任务
 {
   using (var wc = new System.Net.WebClient())
@@ -1070,7 +1066,7 @@ string result = task.Result;  // 等待任务结束并获取结果
 
 `Task.Factory.StartNew`是一步创建并启动任务。你也可以分解它，先创建`Task`实例，再调用`Start`：
 
-```
+```c#
 var task = new Task (() => Console.Write ("Hello"));
 // ...
 task.Start();
@@ -1084,7 +1080,7 @@ task.Start();
 
 当创建任务实例或调用`Task.Factory.StartNew`时，可以指定一个状态对象（state object），它会被传递给目标方法。如果你希望直接调用方法而不是 lambda 表达式，则可以使用它。
 
-```
+```c#
 static void Main()
 {
   var task = Task.Factory.StartNew (Greet, "Hello");
@@ -1096,7 +1092,7 @@ static void Greet (object state) { Console.Write (state); }   // 打印 "Hello"
 
 因为 C# 中有 lambda 表达式，我们可以更好的使用状态对象，用它来给任务赋予一个有意义的名字。然后就可以使用`AsyncState`属性来查询这个名字：
 
-```
+```c#
 static void Main()
 {
   var task = Task.Factory.StartNew (state => Greet ("Hello"), "Greeting");
@@ -1125,7 +1121,7 @@ Visual Studio 会在并行任务窗口显示每个任务的`AsyncState`属性，
 
 当一个任务启动另一个任务时，你可以通过指定`TaskCreationOptions.AttachedToParent`选择性地建立父子关系：
 
-```
+```c#
 Task parent = Task.Factory.StartNew (() =>
 {
   Console.WriteLine ("I am a parent");
@@ -1155,7 +1151,7 @@ Task parent = Task.Factory.StartNew (() =>
 
 `WaitAll`和依次等待每个任务类似，但它更高效，因为它只需要（至多）一次上下文切换。并且，如果有一个或多个任务抛出未处理的异常，`WaitAll`仍然能够等待所有任务，并在之后重新抛出一个[`AggregateException`](https://blog.gkarch.com/threading/part5.html#working-with-aggregateexception)异常，它聚合了所有出错任务的异常，功能相当于下面的代码：
 
-```
+```c#
 // 假设 t1、t2 和 t3 是任务：
 var exceptions = new List<Exception>();
 try { t1.Wait(); } catch (AggregateException ex) { exceptions.Add (ex); }
@@ -1172,7 +1168,7 @@ if (exceptions.Count > 0) throw new AggregateException (exceptions);
 
 当你等待一个任务结束时（通过调用`Wait`方法或访问其`Result`属性），所有未处理的异常都会用一个[`AggregateException`](https://blog.gkarch.com/threading/part5.html#working-with-aggregateexception)对象封装，方便重新抛给调用方。一般就无需在任务代码中处理异常，而是这么做：
 
-```
+```c#
 int x = 0;
 Task<int> calc = Task.Factory.StartNew (() => 7 / x);
 try
@@ -1191,7 +1187,7 @@ catch (AggregateException aex)
 
 对于有父子关系的任务，在父任务上等待也会隐式的等待[子任务](https://blog.gkarch.com/threading/part5.html#child-tasks)，所有子任务的异常也会传递出来。
 
-```
+```c#
 TaskCreationOptions atp = TaskCreationOptions.AttachedToParent;
 var parent = Task.Factory.StartNew (() =>
 {
@@ -1218,7 +1214,7 @@ parent.Wait();
 
 启动任务时可以可选的传递一个[取消标记（cancellation token）](https://blog.gkarch.com/threading/part3.html#cancellation-tokens)。它可以让你通过协作取消模式取消任务，像[之前描述](https://blog.gkarch.com/threading/part3.html#cancellation-tokens)的那样：
 
-```
+```c#
 var cancelSource = new CancellationTokenSource();
 CancellationToken token = cancelSource.Token;
 
@@ -1234,7 +1230,7 @@ cancelSource.Cancel();
 
 如果要检测任务取消，可以用如下方式捕捉[`AggregateException`](https://blog.gkarch.com/threading/part5.html#working-with-aggregateexception)，并检查它的内部异常：
 
-```
+```c#
 try
 {
   task.Wait();
@@ -1252,7 +1248,7 @@ catch (AggregateException ex)
 
 因为取消标记也可以被其它 API 识别，所以可以在其它构造中无缝使用：
 
-```
+```c#
 var cancelSource = new CancellationTokenSource();
 CancellationToken token = cancelSource.Token;
 
@@ -1272,7 +1268,7 @@ Task task = Task.Factory.StartNew (() =>
 
 有时，在一个任务完成（或失败）后马上启动另一个任务会很有用。`Task`类上的`ContinueWith`方法正是实现了这种功能：
 
-```
+```c#
 Task task1 = Task.Factory.StartNew (() => Console.Write ("antecedant.."));
 Task task2 = task1.ContinueWith (ant => Console.Write ("..continuation"));
 ```
@@ -1281,7 +1277,7 @@ Task task2 = task1.ContinueWith (ant => Console.Write ("..continuation"));
 
 我们的例子演示了最简单的延续，它和以下代码功能类似：
 
-```
+```c#
 Task task = Task.Factory.StartNew (() =>
 {
   Console.Write ("antecedent..");
@@ -1297,7 +1293,7 @@ Task task = Task.Factory.StartNew (() =>
 
 像普通任务一样，延续也可以使用`Task<TResult>`类型并返回数据。下面的例子中，我们使用链状任务来计算`Math.Sqrt(8*2)`并打印结果：
 
-```
+```c#
 Task.Factory.StartNew<int> (() => 8)
   .ContinueWith (ant => ant.Result * 2)
   .ContinueWith (ant => Math.Sqrt (ant.Result))
@@ -1310,7 +1306,7 @@ Task.Factory.StartNew<int> (() => 8)
 
 延续可以通过前项的`Exception`属性来获取前项抛出的异常。下面的代码会输出`NullReferenceException`信息：
 
-```
+```c#
 Task task1 = Task.Factory.StartNew (() => { throw null; });
 Task task2 = task1.ContinueWith (ant => Console.Write (ant.Exception));
 ```
@@ -1319,7 +1315,7 @@ Task task2 = task1.ContinueWith (ant => Console.Write (ant.Exception));
 
 安全的模式是重新抛出前项的异常。只要延续被`Wait`等待，异常就能够传播并重新抛出给等待方。
 
-```
+```c#
 Task continuation = Task.Factory.StartNew     (()  => { throw null; })
                                 .ContinueWith (ant =>
   {
@@ -1331,7 +1327,7 @@ continuation.Wait();    // 异常被抛回调用方
 
 另一种处理异常的方法是为异常和正常情况指定不同的延续。需要用到`TaskContinuationOptions`：
 
-```
+```c#
 Task task1 = Task.Factory.StartNew (() => { throw null; });
 
 Task error = task1.ContinueWith (ant => Console.Write (ant.Exception),
@@ -1345,7 +1341,7 @@ Task ok = task1.ContinueWith (ant => Console.Write ("Success!"),
 
 下面的扩展方法会“吞掉”任务的未处理异常：
 
-```
+```c#
 public static void IgnoreExceptions (this Task task)
 {
   task.ContinueWith (t => { var ignore = t.Exception; },
@@ -1355,7 +1351,7 @@ public static void IgnoreExceptions (this Task task)
 
 （可以添加对异常的日志记录来进一步改进它。）以下是用法：
 
-```
+```c#
 Task.Factory.StartNew (() => { throw null; }).IgnoreExceptions();
 ```
 
@@ -1365,7 +1361,7 @@ Task.Factory.StartNew (() => { throw null; }).IgnoreExceptions();
 
 接下来的例子中，我们启动三个子任务，每个都抛出`NullReferenceException`。然后使用父任务的延续来一次性捕捉这些异常：
 
-```
+```c#
 TaskCreationOptions atp = TaskCreationOptions.AttachedToParent;
 Task.Factory.StartNew (() =>
 {
@@ -1383,7 +1379,7 @@ Task.Factory.StartNew (() =>
 
 默认情况下，延续是被无条件调度的，也就是说无论前项是完成、抛出异常还是取消，延续都会执行。你可以通过设置`TaskContinuationOptions`枚举中的标识（可组合）来改变这种行为。三种控制条件延续的核心标识是：
 
-```
+```c#
 NotOnRanToCompletion = 0x10000,
 NotOnFaulted = 0x20000,
 NotOnCanceled = 0x40000,
@@ -1391,7 +1387,7 @@ NotOnCanceled = 0x40000,
 
 这些标识是做减法的，也就是组合的越多，延续越不可能被执行。为了方便使用，也提供了以下预先组合好的值：
 
-```
+```c#
 OnlyOnRanToCompletion = NotOnFaulted | NotOnCanceled,
 OnlyOnFaulted = NotOnRanToCompletion | NotOnCanceled,
 OnlyOnCanceled = NotOnRanToCompletion | NotOnFaulted
@@ -1410,7 +1406,7 @@ OnlyOnCanceled = NotOnRanToCompletion | NotOnFaulted
 
 特别需要注意的是，如果这些标识导致延续无法执行，延续并不是被忘记或抛弃，而是被取消。这意味着所有延续任务上的延续就会开始运行，除非你指定了`NotOnCanceled`。例如：
 
-```
+```c#
 Task t1 = Task.Factory.StartNew (...);
 
 Task fault = t1.ContinueWith (ant => Console.WriteLine ("fault"),
@@ -1425,7 +1421,7 @@ Task t3 = fault.ContinueWith (ant => Console.WriteLine ("t3"));
 
 如果希望仅在`fault`真正运行的情况下执行`t3`，需要把代码改成：
 
-```
+```c#
 Task t3 = fault.ContinueWith (ant => Console.WriteLine ("t3"),
                               TaskContinuationOptions.NotOnCanceled);
 ```
@@ -1436,7 +1432,7 @@ Task t3 = fault.ContinueWith (ant => Console.WriteLine ("t3"),
 
 延续的另一个有用的功能是它可以在多个前项完成后调度执行。`ContinueWhenAll`是在多个前项都完成后调度，而`ContinueWhenAny`是在任意一个前项完成后调度。这两个方法都定义在`TaskFactory`类上：
 
-```
+```c#
 var task1 = Task.Factory.StartNew (() => Console.Write ("X"));
 var task2 = Task.Factory.StartNew (() => Console.Write ("Y"));
 
@@ -1446,7 +1442,7 @@ var continuation = Task.Factory.ContinueWhenAll (
 
 上面的例子会在打印 “ XY “ 或 “ YX “ 之后打印 “ Done “。Lambda 表达式中的`tasks`参数可以用来访问完成的任务数组，当前项返回数据时可以用到。下面的例子对两个前项返回的数字求和：
 
-```
+```c#
 // 真实场景中 task1 和 task2 可能调用复杂的功能：
 Task<int> task1 = Task.Factory.StartNew (() => 123);
 Task<int> task2 = Task.Factory.StartNew (() => 456);
@@ -1465,7 +1461,7 @@ Console.WriteLine (task3.Result);           // 579
 
 下面的代码会等待一秒，然后打印 “ XY “ 或者 “ YX “：
 
-```
+```c#
 var t = Task.Factory.StartNew (() => Thread.Sleep (1000));
 t.ContinueWith (ant => Console.Write ("X"));
 t.ContinueWith (ant => Console.Write ("Y"));
@@ -1480,7 +1476,7 @@ t.ContinueWith (ant => Console.Write ("Y"));
 
 如果对[延续](https://blog.gkarch.com/threading/part5.html#continuations)任务指定了窗口创建时获取的同步上下文调度器，那么就可以安全的更新`lblResult`：
 
-```
+```c#
 public partial class MyWindow : Window
 {
   TaskScheduler _uiScheduler;   // 定义一个字段以便于
@@ -1516,7 +1512,7 @@ public partial class MyWindow : Window
 
 `TaskFactory`不是抽象工厂：你可以实例化这个类，在希望重复使用同样的（非默认的）[`TaskCreationOptions`](https://blog.gkarch.com/threading/part5.html#taskcreationoptions)值、[`TaskContinuationOptions`](https://blog.gkarch.com/threading/part5.html#continuations-and-exceptions)值或者`TaskScheduler`时有用。例如，如果希望重复创建长时间运行的子任务，我们可以这样创建一个自定义工厂：
 
-```
+```c#
 var factory = new TaskFactory (
   TaskCreationOptions.LongRunning | TaskCreationOptions.AttachedToParent,
   TaskContinuationOptions.None);
@@ -1524,7 +1520,7 @@ var factory = new TaskFactory (
 
 然后创建任务就可以仅调用这个工厂上的`StartNew`：
 
-```
+```c#
 Task task1 = factory.StartNew (Method1);
 Task task2 = factory.StartNew (Method2);
 // ...
@@ -1543,7 +1539,7 @@ Task task2 = factory.StartNew (Method2);
 
 使用`TaskCompletionSource`时，就创建它的实例。它暴露一个`Task`属性来返回一个任务，你可以对其等待或附加延续，就和对一般的任务一样。然而这个任务可以通过`TaskCompletionSource`对象的下列方法进行完全控制：
 
-```
+```c#
 public class TaskCompletionSource<TResult>
 {
   public void SetResult (TResult result);
@@ -1563,7 +1559,7 @@ public class TaskCompletionSource<TResult>
 
 下面的代码在等待五秒之后打印 “ 123 “：
 
-```
+```c#
 var source = new TaskCompletionSource<int>();
 
 new Thread (() => { Thread.Sleep (5000); source.SetResult (123); })
@@ -1579,7 +1575,7 @@ Console.WriteLine (task.Result);   // 123
 
 如前所属，[PLINQ](https://blog.gkarch.com/threading/part5.html#plinq)、[`Parallel`](https://blog.gkarch.com/threading/part5.html#the-parallel-class)类和[`Task`](https://blog.gkarch.com/threading/part5.html#task-parallelism)都会自动封送异常给使用者。为了明白这么做的重要性，考虑以下 LINQ 查询，它在第一次迭代时会抛出`DivideByZeroException`：
 
-```
+```c#
 try
 {
   var query = from i in Enumerable.Range (0, 1000000)
@@ -1596,7 +1592,7 @@ catch (DivideByZeroException)
 
 因此，异常会被自动捕捉并重新抛给调用方。然而不幸的是，情况并不是就像捕捉一个`DivideByZeroException`那般简单。因为这些类库会利用很多线程，很可能有两个或更多的异常被同时抛出。为了确保能够报告所有异常，就使用了`AggregateException`作为容器来封装它们，并通过`InnerExceptions`属性来暴露：
 
-```
+```c#
 try
 {
   var query = from i in ParallelEnumerable.Range (0, 1000000)
@@ -1621,7 +1617,7 @@ PLINQ 和`Parallel`类都会在遇到第一个异常时停止查询或循环执�
 
 `AggregateException`经常会包含其它的`AggregateException`。比如在[子任务](https://blog.gkarch.com/threading/part5.html#child-tasks)抛出异常时就可能如此。你可以通过调用`Flatten`来消除任意层级的嵌套以简化处理。这个方法会返回一个新的`AggregateException`，它的`InnerExceptions`就是展平之后的结果：
 
-```
+```c#
 catch (AggregateException aex)
 {
   foreach (Exception ex in aex.Flatten().InnerExceptions)
@@ -1633,7 +1629,7 @@ catch (AggregateException aex)
 
 有时只需要捕捉特定类型的异常，并重新抛出其它类型的异常。`AggregateException`上的`Handle`方法提供了一个快捷方案。它接受一个异常判定器，来对所有封装的异常进行判定：
 
-```
+```c#
 public void Handle (Func<Exception, bool> predicate)
 ```
 
@@ -1644,7 +1640,7 @@ public void Handle (Func<Exception, bool> predicate)
 
 例如，下面的代码最后会重新抛出一个`AggregateException`，并且其中仅包含一个`NullReferenceException`：
 
-```
+```c#
 var parent = Task.Factory.StartNew (() =>
 {
   // 我们使用 3 个子任务同时抛出 3 个异常：
@@ -1701,14 +1697,14 @@ Framework 4.0 在`System.Collections.Concurrent`命名空间中提供了一组�
 
 换句话说，这些集合并不是提供了加锁使用普通集合的快捷办法。为了演示这一点，如果我们在单一线程上执行以下代码：
 
-```
+```c#
 var d = new ConcurrentDictionary<int,int>();
 for (int i = 0; i < 1000000; i++) d[i] = 123;
 ```
 
 它会比下面的代码慢三倍：
 
-```
+```c#
 var d = new Dictionary<int,int>();
 for (int i = 0; i < 1000000; i++) lock (d) d[i] = 123;
 ```
@@ -1730,7 +1726,7 @@ for (int i = 0; i < 1000000; i++) lock (d) d[i] = 123;
 
 `IProducerConsumerCollection<T>`扩展自`ICollection`，并加入了以下方法：
 
-```
+```c#
 void CopyTo (T[] array, int index);
 T[] ToArray();
 bool TryAdd (T item);
@@ -1739,7 +1735,7 @@ bool TryTake (out T item);
 
 `TryAdd`和`TryTake`方法检查是否能进行添加 / 移除操作，如果可以，就进行添加 / 移除。检查和操作是原子的，所以无需像普通集合那样使用锁：
 
-```
+```c#
 int result;
 lock (myStack) if (myStack.Count > 0) result = myStack.Pop();
 ```
@@ -1768,7 +1764,7 @@ lock (myStack) if (myStack.Count > 0) result = myStack.Pop();
 
 如果你的并行操作基本都是在添加元素，或者每个线程的`Add`和`Take`是平衡的，那么使用并发包就很理想。我们来看前面的一个例子，是使用`Parallel.ForEach`来实现并行拼写检查：
 
-```
+```c#
 var misspellings = new ConcurrentBag<Tuple<int,string>>();
 
 Parallel.ForEach (wordsToTest, (word, state, i) =>
@@ -1800,7 +1796,7 @@ Parallel.ForEach (wordsToTest, (word, state, i) =>
 
 前面我们写过一个[使用 `Wait` 和 `Pulse`](https://blog.gkarch.com/threading/part4.html#producer-consumer-queue)的生产者 / 消费者队列。这里使用`BlockingCollection<T>`来重构同一个类（不考虑异常处理）：
 
-```
+```c#
 public class PCQueue : IDisposable
 {
   BlockingCollection<Action> _taskQ = new BlockingCollection<Action>();
@@ -1839,7 +1835,7 @@ public class PCQueue : IDisposable
 
 理想的解决方案是让`EnqueueTask`方法返回一个对象，来提供我们上面描述的功能。好消息是这个类已经存在，正是[`Task`](https://blog.gkarch.com/threading/part5.html#task-parallelism)类。我们需要做的只是通过`TaskCompletionSource`来操控它：
 
-```
+```c#
 public class PCQueue : IDisposable
 {
   class WorkItem
@@ -1917,7 +1913,7 @@ public class PCQueue : IDisposable
 
 下面是如何使用这个类：
 
-```
+```c#
 var pcQ = new PCQueue (1);
 Task task = pcQ.EnqueueTask (() => Console.WriteLine ("Easy!"));
 // ...
@@ -1950,7 +1946,7 @@ Task task = pcQ.EnqueueTask (() => Console.WriteLine ("Easy!"));
 
 下面是个例子：
 
-```
+```c#
 var spinLock = new SpinLock (true);   // 启用所有者追踪
 bool lockTaken = false;
 try
@@ -1982,7 +1978,7 @@ finally
 
 假设我们写了一个纯粹基于一个简单标识的自旋信号系统：
 
-```
+```c#
 bool _proceed;
 void Test()
 {
@@ -2000,7 +1996,7 @@ void Test()
 
 有两种方式使用`SpinWait`。第一种是调用静态方法`SpinUntil`。这个方法接受一个判定器（和一个可选的超时时间）：
 
-```
+```c#
 bool _proceed;
 void Test()
 {
@@ -2011,7 +2007,7 @@ void Test()
 
 另一种（更灵活）的方式是创建`SpinWait`结构体的实例，并在循环中调用`SpinOnce`：
 
-```
+```c#
 bool _proceed;
 void Test()
 {
@@ -2035,7 +2031,7 @@ void Test()
 
 结合`SpinWait`和`Interlocked.CompareExchange`可以原子的更新一个通过自己的值进行计算的字段（读 - 改 - 写）。例如，假设我们要把字段 *x* 乘 10。非线程安全的简单代码就是：
 
-```
+```c#
 x = x * 10;
 ```
 
@@ -2050,7 +2046,7 @@ x = x * 10;
 
 例如：
 
-```
+```c#
 int x;
 
 void MultiplyXBy (int factor)
@@ -2074,7 +2070,7 @@ void MultiplyXBy (int factor)
 
 `CompareExchange`也有重载可以对于`object`类型使用。我们可以利用这个重载来实现对所有引用类型的无锁更新方法：
 
-```
+```c#
 static void LockFreeUpdate<T> (ref T field, Func <T, T> updateFunction)
   where T : class
 {
@@ -2092,7 +2088,7 @@ static void LockFreeUpdate<T> (ref T field, Func <T, T> updateFunction)
 
 下面是如何使用这个方法来写一个无锁的线程安全的事件（实际上，这是 C# 4.0 的编译器对于事件默认的处理）：
 
-```
+```c#
 EventHandler _someDelegate;
 public event EventHandler SomeEvent
 {
@@ -2107,7 +2103,7 @@ public event EventHandler SomeEvent
 
 最后，考虑下面的类：
 
-```
+```c#
 class Test
 {
   ProgressStatus _status = new ProgressStatus (0, "Starting");
@@ -2128,7 +2124,7 @@ class Test
 
 我们可以使用`LockFreeUpdate`方法来增加`_status`的`PercentComplete`字段的值：
 
-```
+```c#
 LockFreeUpdate (ref _status,
   s => new ProgressStatus (s.PercentComplete + 1, s.StatusMessage));
 ```

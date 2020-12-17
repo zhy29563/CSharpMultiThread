@@ -10,7 +10,7 @@
 
 考虑下边这个例子：
 
-```
+```c#
 class Foo
 {
   int _answer;
@@ -40,7 +40,7 @@ C# 和运行时会非常小心的保证这些优化不会破坏普通的单线�
 
 最简单的内存屏障是完全内存屏障（full memory barrier，或全栅栏（full fence）），它可以阻止所有跨越栅栏的指令重排和缓存。调用`Thread.MemoryBarrier`生成一个全栅栏。我们可以使用 4 个全栅栏来修正之前的例子：
 
-```
+```c#
 class Foo
 {
   int _answer;
@@ -80,7 +80,7 @@ class Foo
 
 因为最后一条的关系，下边的代码是线程安全的：
 
-```
+```c#
 int x = 0;
 Task t = Task.Factory.StartNew (() => x++);
 t.Wait();
@@ -89,7 +89,7 @@ Console.WriteLine (x);    // 1
 
 不需要对每一个读或写都使用全栅栏。如果有 3 个 *answer* 字段，我们的例子仍然只需要 4 个栅栏：
 
-```
+```c#
 class Foo
 {
   int _answer1, _answer2, _answer3;
@@ -121,7 +121,7 @@ class Foo
 
 如果在用共享可写字段（shared writable fields）时不加锁或栅栏是自找麻烦。关于这个话题有很多误导信息，包括 MSDN 文档中描述只有在弱内存排序的多处理器系统上`MemoryBarrier`才是必需的，例如，使用多个 Intel Itanium 处理器的系统。我们可以通过下边这个简短的程序证明：在普通的 Intel Core-2 和 Pentium 处理器上，内存屏障也是非常重要的。在开启优化以及非调试模式下运行下边的程序（在 Visual Studio 中，解决方案的配置管理里选择 Release 模式，然后非调试模式下启动 ）
 
-```
+```c#
 static void Main()
 {
   bool complete = false;
@@ -143,7 +143,7 @@ static void Main()
 
 另一个（更高级的）解决这个问题的方法是对`_complete`字段使用`volatile`关键字。
 
-```
+```c#
 volatile bool _complete;
 ```
 
@@ -164,7 +164,7 @@ volatile bool _complete;
 
 注意：使用`volatile`不能阻止写-读被交换，这可能是一个难题。Joe Duffy 使用下面的例子很好的说明了这个问题：如果`Test1`和`Test2`同时运行在不同的线程上，可能`a`和`b`最后的值都是 0 （尽管在`x`和`y`上都使用了`volatile`）:
 
-```
+```c#
 class IfYouThinkYouUnderstandVolatile
 {
   volatile int x, y;
@@ -195,7 +195,7 @@ MSDN 文档描述：使用`volatile`关键字可以确保该字段在任何时�
 
 使用`Thread`类上的静态方法`VolatileRead`和`VolatileWrite`读/写变量时，相当于`volatile`关键字产生的作用（技术上说，作用是其超集）。它们的实现相对低效，可是这是因为它们实际上使用了全栅栏。这是它们对于整型的实现：
 
-```
+```c#
 public static void VolatileWrite (ref int address, int value)
 {
   MemoryBarrier(); address = value;
@@ -213,13 +213,13 @@ public static int VolatileRead (ref int address)
 
 像前所述，`Monitor.Enter`和`Monitor.Exit`都使用了全栅栏。因此，如果我们忽略锁的互斥作用，可以这样说：
 
-```
+```c#
 lock (someField) { ... }
 ```
 
 相当于：
 
-```
+```c#
 Thread.MemoryBarrier(); { ... } Thread.MemoryBarrier();
 ```
 
@@ -229,7 +229,7 @@ Thread.MemoryBarrier(); { ... } Thread.MemoryBarrier();
 
 如果一条语句在底层处理器上被当作一个独立不可分割的指令，那么它本质上是原子的（atomic）。严格的原子性可以阻止任何抢占的可能。对于 32 位（或更低）的字段的简单读写总是原子的。而操作 64 位字段仅在 64 位运行时环境下是原子的，并且结合了多个读写操作的语句必然不是原子的：
 
-```
+```c#
 class Atomicity
 {
   static int _x, _y;
@@ -251,7 +251,7 @@ class Atomicity
 
 编译器实现`x++`这种一元运算，是通过先读一个变量，然后计算，最后写回去的方式。考虑如下类：
 
-```
+```c#
 class ThreadUnsafe
 {
   static int _x = 1000;
@@ -263,7 +263,7 @@ class ThreadUnsafe
 
 当然，可以通过用[`lock`](https://blog.gkarch.com/threading/part2.html#locking)语句封装非原子的操作来解决这些问题。实际上，锁[如果一致的使用，可以模拟原子性](https://blog.gkarch.com/threading/part2.html#locking-and-atomicity)。然而，`Interlocked`类为这样简单的操作提供了一个更方便更快的方案：
 
-```
+```c#
 class Program
 {
   static long _sum;
@@ -323,19 +323,19 @@ class Program
 
 1.　定义一个字段，作为同步对象，例如：
 
-```
+```c#
 readonly object _locker = new object();
 ```
 
 2.　定义一个或多个字段，作为自定义的阻塞条件，例如：
 
-```
+```c#
 bool _go; /* 或 */ int _semaphoreCount;
 ```
 
 3.　当你希望阻塞的时候，使用下边的代码：
 
-```
+```c#
 lock (_locker)
   while (/* <blocking-condition> */)
     Monitor.Wait (_locker);
@@ -343,7 +343,7 @@ lock (_locker)
 
 4.　当改变（或隐式改变）一个阻塞条件的时候，使用下边的代码：
 
-```
+```c#
 lock (_locker)
 {
   // 修改会影响阻塞条件的字段或数据
@@ -356,7 +356,7 @@ lock (_locker)
 
 这个模式允许任意线程在任意时间使用任意条件等待。下边这个简单的例子，一个线程等待直到`_go`字段被设置为`true`：
 
-```
+```c#
 class SimpleWaitPulse
 {
   static readonly object _locker = new object();
@@ -402,7 +402,7 @@ Woken!!!   (按下回车键之后)
 
 这意味着当`Monitor.Wait`在等待脉冲时，同步对象上的锁没有被持有。这并不是像代码看上去那样。
 
-```
+```c#
 lock (_locker)
 {
   while (!_go)
@@ -424,7 +424,7 @@ lock (_locker)
 
 如果我们抛弃该模式，移除`while`循环、`_go`标识以及`ReadLine`，就获得了一个最基础的`Wait / Pulse`的例子：
 
-```
+```c#
 static void Main()
 {
   new Thread (Work).Start();
@@ -456,7 +456,7 @@ Thread[] _workers;
 
 每个工作线程会执行一个名为`Consume`的方法。我们可以在一个循环中创建和启动线程，例如：
 
-```
+```c#
 public PCQueue (int workerCount)
 {
   _workers = new Thread [workerCount];
@@ -469,13 +469,13 @@ public PCQueue (int workerCount)
 
 之前我们只是使用一个字符串来代表任务，这次使用一种更灵活的方式，即一个委托。我们使用 .NET Framework 中的`System.Action`委托，它定义如下：
 
-```
+```c#
 public delegate void Action();
 ```
 
 这个委托可以匹配任意无参方法，很像`ThreadStart`委托。当然我们也可以描述需要参数的任务，通过把调用封装在匿名委托或 lambda 表达式中。
 
-```
+```c#
 Action myFirstTask = delegate
 {
     Console.WriteLine ("foo");
@@ -486,13 +486,13 @@ Action mySecondTask = () => Console.WriteLine ("foo");
 
 如之前一样，使用`Queue<T>`来表示任务的队列：
 
-```
+```c#
 Queue<Action> _itemQ = new Queue<Action>();
 ```
 
 在讨论`EnqueueItem`和`Consume`方法之前，先来看一下完整的代码：
 
-```
+```c#
 using System;
 using System.Threading;
 using System.Collections.Generic;
@@ -554,7 +554,7 @@ public class PCQueue
 
 这里的`Main`方法，用来启动一个生产者 / 消费者队列。它指定了两个并发的消费者线程，然后向队列中加入 10 个委托，它们将在两个消费者之间共享。
 
-```
+```c#
 static void Main()
 {
   PCQueue q = new PCQueue (2);
@@ -588,7 +588,7 @@ Workers complete!
 
 现在我们来看一下`EnqueueItem`方法：
 
-```
+```c#
 public void EnqueueItem (Action item)
  {
    lock (_locker)
@@ -605,7 +605,7 @@ public void EnqueueItem (Action item)
 
 现在，来看一下`Comsume`方法，一个工作线程从队列中取出并执行一个项目。我们希望工作线程没什么事情做的时候，或者说当队列中没有任何项目时，它们应该被阻塞。因此，我们的阻塞条件是`_itemQ.Count == 0`：
 
-```
+```c#
       Action item;
       lock (_locker)
       {
@@ -618,7 +618,7 @@ public void EnqueueItem (Action item)
 
 当`_itemQ.Count`非 0 时，`while`循环退出，意味着（至少）有一个项目尚未完成。我们必须在释放锁之前取出这个项目，否则，当我们取它时，它可能已经不在队列里了（存在其它线程的情况下，事情可能在你眨眼的瞬间发生变化！）。特别的，如果我们没有持有锁，其它那些刚完成一个之前工作的消费者可以偷偷进来取走我们的项目，例如如果使用下边的代码：
 
-```
+```c#
       Action item;
       lock (_locker)
       {
@@ -649,7 +649,7 @@ public void EnqueueItem (Action item)
 
 `Wait`的超时时间有一个有用的地方。有时，当阻塞条件改变时，可能无法使用`Pulse`。一个例子是阻塞条件涉及调用一个方法，它通过定期查询数据库来获取信息。如果延迟不是问题，解决方案就很简单：可以在调用`Wait`时设置一个超时时间。
 
-```
+```c#
 lock (_locker)
   while (/* <blocking-condition> */)
     Monitor.Wait (_locker, /* <timeout> */);
@@ -681,7 +681,7 @@ lock (_locker)
 
 为举例说明，假设我们希望连续向一个线程发 5 次信号：
 
-```
+```c#
 class Race
 {
   static readonly object _locker = new object();
@@ -736,7 +736,7 @@ Wassup? (没啦)
 
 代码如下：
 
-```
+```c#
 class Solved
 {
   static readonly object _locker = new object();
@@ -783,7 +783,7 @@ Wassup? (重复 5 次)
 
 你可能注意到了之前例子中的一个模式：两个等待循环都有如下的结构：
 
-```
+```c#
 lock (_locker)
 {
   while (!_flag) Monitor.Wait (_locker);
@@ -796,7 +796,7 @@ lock (_locker)
 
 让我们补完使用`Wait`和`Pulse`来实现[`ManualResetEvent`](https://blog.gkarch.com/threading/part2.html#manualresetevent)的完整代码：
 
-```
+```c#
 readonly object _locker = new object();
 bool _signal;
 
@@ -820,7 +820,7 @@ void Reset() { lock (_locker) _signal = false; }
 
 实现[`AutoResetEvent`](https://blog.gkarch.com/threading/part2.html#autoresetevent)非常简单，只需要将`WaitOne`方法内改为：
 
-```
+```c#
 lock (_locker)
 {
   while (!_signal) Monitor.Wait (_locker);
@@ -830,7 +830,7 @@ lock (_locker)
 
 然后将`Set`方法内的`PulseAll`替换成`Pulse`：
 
-```
+```c#
  lock (_locker) { _signal = true; Monitor.Pulse (_locker); }
 ```
 
@@ -840,7 +840,7 @@ lock (_locker)
 
 在简单的场景中，模拟跨多个等待句柄工作的静态方法也很容易。调用[`WaitAll`](https://blog.gkarch.com/threading/part2.html#waitany-waitall-signalandwait)只不过相当于使用一阻塞条件，它结合了所有等待句柄使用的标识：
 
-```
+```c#
 lock (_locker)
   while (!_flag1 && !_flag2 && !_flag3...)
     Monitor.Wait (_locker);
@@ -854,7 +854,7 @@ lock (_locker)
 
 使用`Wait`和`Pulse`，我们也可以实现[`CountdownEvent`](https://blog.gkarch.com/threading/part2.html#countdownevent)的基本功能：
 
-```
+```c#
 public class Countdown
 {
   object _locker = new object ();
@@ -889,7 +889,7 @@ public class Countdown
 
 可以使用刚刚写的`Countdown`类，来实现两个线程的会合。和之前的[` WaitHandle.SignalAndWait`](https://blog.gkarch.com/threading/part2.html#waitany-waitall-signalandwait)可以用于会合一对线程一样：
 
-```
+```c#
 class Rendezvous
 {
   static object _locker = new object();
@@ -941,7 +941,7 @@ class Rendezvous
 
 下边的例子中，三个线程每个都与其它线程步调一致地打印数字 0 到 4：
 
-```
+```c#
 static Barrier _barrier = new Barrier (3);
 
 static void Main()
@@ -969,7 +969,7 @@ static void Speak()
 
 `Barrier`类的一个非常有用的功能是，构造它时你可以指定一个后期动作（post-phase action）。这是一个委托，在`SignalAndWait`被调用 *n* 次后，且在线程解除阻塞之前运行。在我们的例子中，如果像这样实例化`Barrier`：
 
-```
+```c#
 static Barrier _barrier = new Barrier (3, barrier => Console.WriteLine());
 ```
 
@@ -1002,7 +1002,7 @@ static Barrier _barrier = new Barrier (3, barrier => Console.WriteLine());
 
 `ReaderWriterLockSlim`定义了如下的方法来获取和释放读 / 写锁：
 
-```
+```c#
 public void EnterReadLock();
 public void ExitReadLock();
 public void EnterWriteLock();
@@ -1013,7 +1013,7 @@ public void ExitWriteLock();
 
 下边的程序演示了`ReaderWriterLockSlim`的用法。三个线程不停枚举一个列表，同时另外两个线程每秒向列表中加入一个随机数。读锁保护对列表的读，写锁保护对列表的写。
 
-```
+```c#
 class SlimDemo
 {
   static ReaderWriterLockSlim _rw = new ReaderWriterLockSlim();
@@ -1077,7 +1077,7 @@ Console.WriteLine (_rw.CurrentReadCount + " concurrent readers");
 
 几乎总会打印 “ 3 concurrent readers “（`Read`方法花费绝大多数时间在`foreach`循环中）。像`CurrentReadCount`一样，`ReaderWriterLockSlim`提供了如下属性用来监视锁：
 
-```
+```c#
 public bool IsReadLockHeld            { get; }
 public bool IsUpgradeableReadLockHeld { get; }
 public bool IsWriteLockHeld           { get; }
@@ -1123,7 +1123,7 @@ public int  RecursiveWriteCount       { get; }
 
 我们下面演示更新锁的用法，修改之前例子中的`Write`方法，仅当数字不在列表中的时候才添加它：
 
-```
+```c#
 while (true)
 {
   int newNumber = GetRandNum (100);
@@ -1156,13 +1156,13 @@ rw.ExitReadLock();
 
 然而，如果你使用下边的代码来构造`ReaderWriterLockSlim`，就可以正常运行：
 
-```
+```c#
 var rw = new ReaderWriterLockSlim (LockRecursionPolicy.SupportsRecursion);
 ```
 
 这确保了只有在你计划使用时，递归锁定才可以使用。递归锁定会产生额外的复杂度，因为可能会同时获取不只一种类型的锁：
 
-```
+```c#
 rw.EnterWriteLock();
 rw.EnterReadLock();
 Console.WriteLine (rw.IsReadLockHeld);     // True
@@ -1185,7 +1185,7 @@ rw.ExitWriteLock();
 
 然而，在当前线程上调用`Suspend`是安全的，并且这样做你可以实现一个简单的同步机制：工作线程在一个循环中执行完任务，然后调用`Suspend`，等待主线程在有新的任务时将其恢复（“唤醒”）。但是难点是判断工作线程是否被挂起了，考虑如下代码：
 
-```
+```c#
 worker.NextTask = "MowTheLawn";
 
 if ((worker.ThreadState & ThreadState.Suspended) > 0)
@@ -1204,7 +1204,7 @@ else
 
 可以通过调用`Abort`方法来强制结束一个线程：
 
-```
+```c#
 class Abort
 {
   static void Main()
@@ -1219,7 +1219,7 @@ class Abort
 
 线程被中止时会立即进入[`AbortRequested`](https://blog.gkarch.com/threading/part2.html#threadstate)状态。如果它如预期一样中止了，就会进入`Stopped`状态。调用方可以调用`Join`来等待这个过程完成：
 
-```
+```c#
 class Abort
 {
   static void Main()
@@ -1243,7 +1243,7 @@ class Abort
 
 调用`Abort`会在目标线程上抛出`ThreadAbortException`异常，大多数情况下都会发生在线程正在执行的点。线程被中止时可以选择处理异常，但异常会在`catch`块的最后自动被重新抛出（用来确保线程能够如愿结束）。但是，可以通过在`catch`块中调用`Thread.ResetAbort`来阻止异常被自动重新抛出。之后，线程重新进入`Running`状态（从这开始，它可能被再次中止）。在下边的例子中，每当`Abort`试图中止的时候，工作线程都会起死回生：
 
-```
+```c#
 class Terminator
 {
   static void Main()
@@ -1271,7 +1271,7 @@ class Terminator
 
 `Abort`几乎对处于任何状态的线程都有效：`Running`、`Blocked`、`Suspended`以及`Stopped`。然而，当挂起的线程被中止时，`ThreadStateException`异常会被抛出。这次是在调用方线程中，中止会直到线程之后恢复时才会起作用。下边是如何中止一个挂起的线程：
 
-```
+```c#
 try { suspendedThread.Abort(); }
 catch (ThreadStateException) { suspendedThread.Resume(); }
 // 现在 suspendedThread 才会中止
@@ -1289,14 +1289,14 @@ catch (ThreadStateException) { suspendedThread.Resume(); }
 
 中止纯 .NET 代码没多大问题，只要使用`try / finally`块或`using`语句在`ThreadAbortException`被抛出时进行适当地清理。然而即使这样，还是可能碰到“惊喜”。例如，考虑下边的代码：
 
-```
+```c#
 using (StreamWriter w = File.CreateText ("myfile.txt"))
   w.Write ("Abort-Safe?");
 ```
 
 C# 的`using`语句是一个语法糖，它可以扩展为如下代码：
 
-```
+```c#
 StreamWriter w;
 w = File.CreateText ("myfile.txt");
 try     { w.Write ("Abort-Safe"); }
@@ -1305,7 +1305,7 @@ finally { w.Dispose();            }
 
 `Abort`有可能发生在`StreamWriter`创建之后但是在`try`块之前。实际上，通过分析 IL，可以看出它也有可能发生在`StreamWriter`被创建和赋值给`w`之间：
 
-```
+```c#
 IL_0001:  ldstr      "myfile.txt"
 IL_0006:  call       class [mscorlib]System.IO.StreamWriter
                      [mscorlib]System.IO.File::CreateText(string)
@@ -1319,7 +1319,7 @@ IL_000b:  stloc.0
 
 在现实中，这个例子的情况可能更糟，因为`Abort`最可能发生在`File.CreateText`的实现中。这里是不透明的代码，我们没有它的源码。幸运的是，.NET 的代码不是真正不透明的：我们可以借助 ILDASM 或者更好用的 Reflector（译者注：还有微软的[reference source](http://referencesource.microsoft.com/#mscorlib/system/io/streamwriter.cs,180)），来了解`File.CreateText`是如何调用`StreamWriter`的构造方法的，逻辑如下：
 
-```
+```c#
 public StreamWriter (string path, bool append, ...)
 {
   ...

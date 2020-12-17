@@ -411,19 +411,19 @@ Framework 4.0 提供了两个类来对我们之前演示的协作取消模式做
 
 要使用这两个类，首先实例化一个`CancellationTokenSource`对象：
 
-```
+```c#
 var cancelSource = new CancellationTokenSource();
 ```
 
 然后，传递`Token`属性给你希望支持取消的方法：
 
-```
+```c#
 new Thread (() => Work (cancelSource.Token)).Start();
 ```
 
 这里是`Work`的定义：
 
-```
+```c#
 void Work (CancellationToken cancelToken)
 {
   cancelToken.ThrowIfCancellationRequested();
@@ -547,7 +547,7 @@ public Expensive Expensive
 
 下边是双检锁的实现，以供参考：
 
-```
+```c#
 volatile Expensive _expensive;
 public Expensive Expensive
 {
@@ -564,7 +564,7 @@ public Expensive Expensive
 
 下边是竞争初始化（race-to-initialize）模式的实现：
 
-```
+```c#
 volatile Expensive _expensive;
 public Expensive Expensive
 {
@@ -596,7 +596,7 @@ public Expensive Expensive
 
 实现线程局部存储最简单的方法是使用一个静态字段，并添加`ThreadStatic`特性：
 
-```
+```c#
 [ThreadStatic] static int _x;
 ```
 
@@ -610,7 +610,7 @@ public Expensive Expensive
 
 下边例子描述了如何为每个线程创建一个`ThreadLocal<int>`字段，并且设置一个默认值’3’：
 
-```
+```c#
 static ThreadLocal<int> _x = new ThreadLocal<int> (() => 3);
 ```
 
@@ -620,14 +620,14 @@ static ThreadLocal<int> _x = new ThreadLocal<int> (() => 3);
 
 `ThreadLocal<T>`也适用于实例字段和被捕获的局部变量。例如，考虑一下在多线程环境下生成随机数的问题。`Random`类不是线程安全的，所以我们要不然在使用`Random`时加锁（这样限制了并发），要不然为每个线程使用独立的`Random`对象。`ThreadLocal<T>`可以让后者的实现更简单：
 
-```
+```c#
 var localRandom = new ThreadLocal<Random>(() => new Random());
 Console.WriteLine (localRandom.Value.Next());
 ```
 
 我们创建`Random`对象的工厂方法有点简单，使用的`Random`的无参构造方法依赖系统时间作为生成随机数的种子。在大概 10ms 时间内创建的两个`Random`对象可能会使用相同的种子，下边是解决这个问题的一个办法：
 
-```
+```c#
 var localRandom = new ThreadLocal<Random>
  ( () => new Random (Guid.NewGuid().GetHashCode()) );
 ```
@@ -638,7 +638,7 @@ var localRandom = new ThreadLocal<Random>
 
 第三种方式是使用`Thread`类上的两个方法：`GetData`和`SetData`。它们在线程特定的“槽（slots）”（译者注：代表线程局部存储区中的一个位置）中存储数据。`Thread.GetData`从线程独立的数据存储区中读取数据，`Thread.SetData`向其中写数据。这两个方法都需要一个`LocalDataStoreSlot`的对象来指定这个槽。同一个槽可以跨线程使用，并且它们仍然是获取独立的值。下边是个例子：
 
-```
+```c#
 class Test
 {
   // 同一个 LocalDataStoreSlot 对象可以跨线程使用。
@@ -659,7 +659,7 @@ class Test
 
 在这个例子中，我们调用`Thread.GetNamedDataSlot`，它创建了一个命名的槽，允许其在程序内共享。或者，你也可以通过使用未命名的槽来自行控制其作用域，用`Thread.AllocateDataSlot`来获取一个槽。
 
-```
+```c#
 class Test
 {
   LocalDataStoreSlot _secSlot = Thread.AllocateDataSlot();
@@ -672,7 +672,7 @@ class Test
 
 如果你需要使用规律的时间间隔重复执行一些方法，最简单的方式是使用定时器（timer）。与下边的例子相比，定时器可以便捷、高效地使用内存和资源：
 
-```
+```c#
 new Thread (delegate() {
                          while (enabled)
                          {
@@ -700,7 +700,7 @@ new Thread (delegate() {
 
 `System.Threading.Timer`是最简单的多线程定时器：它仅仅有一个构造方法和两个普通方法（取悦于极简主义者，还有本书作者！）。在接下来的例子中，一个定时器在 5 秒钟之后调用`Tick`方法来打印 “ tick… “，之后每秒打印一次直到用户按下回车键：
 
-```
+```c#
 using System;
 using System.Threading;
 
@@ -736,7 +736,7 @@ class Program
 
 这有个例子：
 
-```
+```c#
 using System;
 using System.Timers;   // 命名空间是 Timers 而不是 Threading
 

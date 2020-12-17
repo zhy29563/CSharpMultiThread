@@ -1,32 +1,28 @@
 ## 同步概要
 
-在[第 1 部分：基础知识](https://blog.gkarch.com/threading/part1.html)中，我们描述了如何在线程上启动任务、配置线程以及双向传递数据。同时也说明了局部变量对于线程来说是私有的，以及引用是如何在线程之间共享，允许其通过公共字段进行通信。
-
-下一步是同步（synchronization）：为期望的结果协调线程的行为。当多个线程访问同一个数据时，同步尤其重要，但是这是一件非常容易搞砸的事情。
-
 同步构造可以分为以下四类：
 
-- 简单的阻塞方法
+- **简单的阻塞方法**
 
   这些方法会使当前线程等待另一个线程结束或是自己等待一段时间。`Sleep`、`Join`与`Task.Wait`都是简单的阻塞方法。
 
-- 锁构造
+- **锁构造**
 
-  锁构造能够限制每次可以执行某些动作或是执行某段代码的线程数量。排它锁构造是最常见的，它每次只允许一个线程执行，从而可以使得参与竞争的线程在访问公共数据时不会彼此干扰。标准的排它锁构造是[`lock`](https://blog.gkarch.com/threading/part2.html#locking)（`Monitor.Enter`/`Monitor.Exit`）、[`Mutex`](https://blog.gkarch.com/threading/part2.html#mutex)与 [`SpinLock`](https://blog.gkarch.com/threading/part5.html#spinlock-and-spinwait)。非排它锁构造是[`Semaphore`](https://blog.gkarch.com/threading/part2.html#semaphore)、[`SemaphoreSlim`](https://blog.gkarch.com/threading/part2.html#semaphore)以及[读写锁](https://blog.gkarch.com/threading/part4.html#reader-writer-locks)。
+  锁构造能够限制每次可以执行某些动作或是执行某段代码的线程数量。排它锁构造是最常见的，它每次只允许一个线程执行，从而可以使得参与竞争的线程在访问公共数据时不会彼此干扰。标准的排它锁构造是`lock`（`Monitor.Enter`/`Monitor.Exit`）、`Mutex`与 `SpinLock`。非排它锁构造是`Semaphore`、`SemaphoreSlim`以及读写锁。
 
-- 信号构造
+- **信号构造**
 
-  信号构造可以使一个线程暂停，直到接收到另一个线程的通知，避免了低效的轮询 。有两种经常使用的信号设施：[事件等待句柄（event wait handle ）](https://blog.gkarch.com/threading/part2.html#signaling-with-event-wait-handles)和`Monitor`类的[`Wait` / `Pluse`](https://blog.gkarch.com/threading/part4.html#signaling-with-wait-and-pulse)方法。Framework 4.0 加入了[`CountdownEvent`](https://blog.gkarch.com/threading/part2.html#countdownevent)与[`Barrier`](https://blog.gkarch.com/threading/part4.html#the-barrier-class)类。
+  信号构造可以使一个线程暂停，直到接收到另一个线程的通知，避免了低效的轮询 。有两种经常使用的信号设施：事件等待句柄（event wait handle ）和`Monitor`类的`Wait` / `Pluse`方法。Framework 4.0 加入了`CountdownEvent`与`Barrier`类。
 
-- 非阻塞同步构造
+- **非阻塞同步构造**
 
-  非阻塞同步构造通过调用处理器指令来保护对公共字段的访问。CLR 与 C# 提供了下列非阻塞构造：[`Thread.MemoryBarrier` 、`Thread.VolatileRead`、`Thread.VolatileWrite`](https://blog.gkarch.com/threading/part4.html#memory-barriers-and-volatility)、[`volatile`](https://blog.gkarch.com/threading/part4.html#the-volatile-keyword)关键字以及[`Interlocked`](https://blog.gkarch.com/threading/part4.html#interlocked)类。
+  非阻塞同步构造通过调用处理器指令来保护对公共字段的访问。CLR 与 C# 提供了下列非阻塞构造：`Thread.MemoryBarrier` 、`Thread.VolatileRead`、`Thread.VolatileWrite`、`volatile`关键字以及`Interlocked`类。
 
 阻塞这个概念对于前三类来说都非常重要，接下来我们简要的剖析下它。
 
 ### 阻塞
 
-当线程的执行由于某些原因被暂停，比如调用`Sleep`等待一段时间，或者通过`Join`或`EndInvoke`方法等待其它线程结束时，则认为此线程被阻塞（blocked）。被阻塞的线程会立即出让（yields）其处理器时间片，之后不再消耗处理器时间，直到阻塞条件被满足。可以通过线程的[`ThreadState`](https://blog.gkarch.com/threading/part2.html#threadstate)属性来检查一个线程是否被阻塞：
+当线程的执行由于某些原因被暂停，比如调用`Sleep`等待一段时间，或者通过`Join`或`EndInvoke`方法等待其它线程结束时，则认为此线程被阻塞（blocked）。被阻塞的线程会立即出让（yields）其处理器时间片，之后不再消耗处理器时间，直到阻塞条件被满足。可以通过线程的`ThreadState`属性来检查一个线程是否被阻塞：
 
 ```c#
 bool blocked = (someThread.ThreadState & ThreadState.WaitSleepJoin) != 0;
@@ -40,14 +36,14 @@ bool blocked = (someThread.ThreadState & ThreadState.WaitSleepJoin) != 0;
 
 - 阻塞条件被满足
 - 操作超时（如果指定了超时时间）
-- 通过[`Thread.Interrupt`](https://blog.gkarch.com/threading/part3.html#interrupt)中断
-- 通过[`Thread.Abort`](https://blog.gkarch.com/threading/part3.html#abort)中止
+- 通过`Thread.Interrupt`中断
+- 通过`Thread.Abort`中止
 
-通过[`Suspend`](https://blog.gkarch.com/threading/part4.html#suspend-and-resume)方法（已过时，不应该再使用）暂停线程的执行不被认为是阻塞。
+通过`Suspend`方法（已过时，不应该再使用）暂停线程的执行不被认为是阻塞。
 
 ### 阻塞 vs 自旋
 
-有时线程必须暂停，直到特定条件被满足。[信号构造](https://blog.gkarch.com/threading/part2.html#signaling-with-event-wait-handles)和[锁构造](https://blog.gkarch.com/threading/part2.html#locking)可以通过在条件被满足前[阻塞](https://blog.gkarch.com/threading/part2.html#blocking)线程来实现。但是还有一种更为简单的方法：线程可以通过自旋（spinning）来等待条件被满足。例如：
+有时线程必须暂停，直到特定条件被满足。信号构造和锁构造可以通过在条件被满足前阻塞线程来实现。但是还有一种更为简单的方法：线程可以通过自旋（spinning）来等待条件被满足。例如：
 
 ```c#
 while (!proceed);
@@ -60,12 +56,13 @@ while (DateTime.Now < nextStartTime);
 有时会组合使用阻塞与自旋：
 
 ```c#
-while (!proceed) Thread.Sleep (10);
+while (!proceed) 
+    Thread.Sleep (10);
 ```
 
-尽管并不优雅，但是这比仅使用自旋更高效（一般来说）。然而这样也可能会出现问题，这是由`proceed`标识上的并发问题引起的。正确的使用和[锁构造](https://blog.gkarch.com/threading/part2.html#locking)和[信号构造](https://blog.gkarch.com/threading/part2.html#signaling-with-event-wait-handles)可以避免这个问题。
+尽管并不优雅，但是这比仅使用自旋更高效（一般来说）。然而这样也可能会出现问题，这是由`proceed`标识上的并发问题引起的。正确的使用和锁构造和信号构造可以避免这个问题。
 
-自旋在等待的条件很快（大致几微秒）就能被满足的情况下更高效，因为它避免了上下文切换带来的额外开销。.NET Framework 提供了专门的方法和类型来辅助实现自旋，在[第 5 部分](https://blog.gkarch.com/threading/part5.html#spinlock-and-spinwait)会讲到。
+自旋在等待的条件很快（大致几微秒）就能被满足的情况下更高效，因为它避免了上下文切换带来的额外开销。.NET Framework 提供了专门的方法和类型来辅助实现自旋。
 
 ### 线程状态
 
@@ -78,9 +75,7 @@ while (!proceed) Thread.Sleep (10);
 ```c#
 public static ThreadState SimpleThreadState (ThreadState ts)
 {
-  return ts & (ThreadState.Unstarted |
-               ThreadState.WaitSleepJoin |
-               ThreadState.Stopped);
+    return ts & (ThreadState.Unstarted | ThreadState.WaitSleepJoin | ThreadState.Stopped);
 }
 ```
 
@@ -90,22 +85,21 @@ public static ThreadState SimpleThreadState (ThreadState ts)
 
 排它锁用于确保同一时间只允许一个线程执行指定的代码段。主要的两个排它锁构造是`lock`和`Mutex`（互斥体）。其中`lock`更快，使用也更方便。而`Mutex`的优势是它可以跨进程的使用。
 
-在这一节里，我们从介绍`lock`构造开始，然后介绍[`Mutex`](https://blog.gkarch.com/threading/part2.html#mutex)和[信号量（semaphore）](https://blog.gkarch.com/threading/part2.html#semaphore)（用于非排它场景）。稍后在第 4 部分会介绍[读写锁（reader / writer lock）](https://blog.gkarch.com/threading/part4.html#reader-writer-locks)。
-
-Framework 4.0 加入了[`SpinLock`](https://blog.gkarch.com/threading/part5.html#spinlock-and-spinwait)结构体，可以用于高并发场景。
+在这一节里，我们从介绍`lock`构造开始，然后介绍`Mutex`和信号量（semaphore）（用于非排它场景）。稍后会介绍读写锁（reader / writer lock）。Framework 4.0 加入了`SpinLock`结构体，可以用于高并发场景。
 
 让我们从下边这个类开始：
 
 ```c#
 class ThreadUnsafe
 {
-  static int _val1 = 1, _val2 = 1;
-
-  static void Go()
-  {
-    if (_val2 != 0) Console.WriteLine (_val1 / _val2);
-    _val2 = 0;
-  }
+    static int _val1 = 1, _val2 = 1;
+    
+    static void Go()
+    {
+        if (_val2 != 0)
+            Console.WriteLine (_val1 / _val2);
+        _val2 = 0;
+    }
 }
 ```
 
@@ -116,34 +110,35 @@ class ThreadUnsafe
 ```c#
 class ThreadSafe
 {
-  static readonly object _locker = new object();
-  static int _val1, _val2;
-
-  static void Go()
-  {
-    lock (_locker)
+    static readonly object _locker = new object();
+    static int _val1, _val2;
+    
+    static void Go()
     {
-      if (_val2 != 0) Console.WriteLine (_val1 / _val2);
-      _val2 = 0;
+        lock (_locker)
+        {
+            if (_val2 != 0)
+                Console.WriteLine (_val1 / _val2);
+            _val2 = 0;
+        }
     }
-  }
 }
 ```
 
-同一时间只有一个线程可以锁定同步对象（这里指`_locker`），并且其它竞争锁的线程会被[阻塞](https://blog.gkarch.com/threading/part2.html#blocking)，直到锁被释放。如果有多个线程在竞争锁，它们会在一个“就绪队列（ready queue）”中排队，并且遵循先到先得的规则（需要说明的是，Windows 系统和 CLR 的差别可能导致这个队列在有时会不遵循这个规则）。因为一个线程的访问不能与另一个线程相重叠，排它锁有时也被这样描述：它强制对锁保护的内容进行顺序（serialized）访问。在这个例子中，我们保护的是`Go`方法的内部逻辑，还有`_val1`与`_val2`字段。
+同一时间只有一个线程可以锁定同步对象（这里指`_locker`），并且其它竞争锁的线程会被阻塞，直到锁被释放。如果有多个线程在竞争锁，它们会在一个“就绪队列（ready queue）”中排队，并且遵循先到先得的规则（需要说明的是，Windows 系统和 CLR 的差别可能导致这个队列在有时会不遵循这个规则）。因为一个线程的访问不能与另一个线程相重叠，排它锁有时也被这样描述：它强制对锁保护的内容进行顺序（serialized）访问。在这个例子中，我们保护的是`Go`方法的内部逻辑，还有`_val1`与`_val2`字段。
 
-在竞争锁时被阻塞的线程，它的[线程状态](https://blog.gkarch.com/threading/part2.html#threadstate)是`WaitSleepJoin`。在[中断与中止](https://blog.gkarch.com/threading/part3.html#interrupt-and-abort)中，我们会描述如何通过其它线程强制释放被阻塞的线程，这是一种可以用于结束线程的重型技术（译者注：这里指它们应该被作为在没有其它更为优雅的办法时的最后手段）。
+在竞争锁时被阻塞的线程，它的线程状态是`WaitSleepJoin`。在中断与中止中，我们会描述如何通过其它线程强制释放被阻塞的线程，这是一种可以用于结束线程的重型技术（译者注：这里指它们应该被作为在没有其它更为优雅的办法时的最后手段）。
 
 #### 锁构造比较
 
-| 构造                                                         | 用途                                               | 跨进程 | 开销* |
-| ------------------------------------------------------------ | -------------------------------------------------- | ------ | ----- |
-| [lock](https://blog.gkarch.com/threading/part2.html#locking) （`Monitor.Enter`/`Monitor.Exit`） | 确保同一时间只有一个线程可以访问资源或代码         | -      | 20ns  |
-| [Mutex](https://blog.gkarch.com/threading/part2.html#mutex)  |                                                    | 1000ns |       |
-| [SemaphoreSlim](https://blog.gkarch.com/threading/part2.html#semaphore) （Framework 4.0 中加入） | 确保只有不超过指定数量的线程可以并发访问资源或代码 | -      | 200ns |
-| [Semaphore](https://blog.gkarch.com/threading/part2.html#semaphore) |                                                    | 1000ns |       |
-| [ReaderWriterLockSlim](https://blog.gkarch.com/threading/part4.html#reader-writer-locks) （Framework 3.5 中加入） | 允许多个读线程和一个写线程共存                     | -      | 40ns  |
-| [ReaderWriterLock](https://blog.gkarch.com/threading/part4.html#reader-writer-locks) （已过时） | -                                                  | 100ns  |       |
+| 构造                                         | 用途                                               | 跨进程 | 开销* |
+| -------------------------------------------- | -------------------------------------------------- | ------ | ----- |
+| lock（`Monitor.Enter`/`Monitor.Exit`）       | 确保同一时间只有一个线程可以访问资源或代码         | -      | 20ns  |
+| Mutex                                        |                                                    | 1000ns |       |
+| SemaphoreSlim（Framework 4.0 中加入）        | 确保只有不超过指定数量的线程可以并发访问资源或代码 | -      | 200ns |
+| Semaphore                                    |                                                    | 1000ns |       |
+| ReaderWriterLockSlim（Framework 3.5 中加入） | 允许多个读线程和一个写线程共存                     | -      | 40ns  |
+| ReaderWriterLock（已过时）                   | -                                                  | 100ns  |       |
 
 \* 时间代表在同一线程上一次进行加锁和释放锁（假设没有阻塞）的开销，在 Intel Core i7 860 上测得。
 
@@ -155,10 +150,14 @@ C# 的`lock`语句是一个语法糖，它其实就是使用了`try / finally`�
 Monitor.Enter (_locker);
 try
 {
-  if (_val2 != 0) Console.WriteLine (_val1 / _val2);
-  _val2 = 0;
+    if (_val2 != 0)
+        Console.WriteLine (_val1 / _val2);
+    _val2 = 0;
 }
-finally { Monitor.Exit (_locker); }
+finally
+{ 
+    Monitor.Exit (_locker); 
+}
 ```
 
 如果在同一个对象上没有先调用`Monitor.Enter`就调用`Monitor.Exit`会抛出一个异常。
@@ -167,7 +166,7 @@ finally { Monitor.Exit (_locker); }
 
 刚刚所描述的就是 C# 1.0、2.0 和 3.0 的编译器翻译`lock`语句产生的代码。
 
-然而它有一个潜在的缺陷。考虑这样的情况：在`Monitor.Enter`的实现内部或者在`Monitor.Enter`与`try`中间有异常被抛出（可能是因为在线程上调用了[`Abort`](https://blog.gkarch.com/threading/part3.html#abort)，或者有`OutOfMemoryException`异常被抛出），这时不一定能够获得锁。如果获得了锁，那么该锁就不会被释放，因为不可能执行到`try / finally`内，这会导致锁泄漏。
+然而它有一个潜在的缺陷。考虑这样的情况：在`Monitor.Enter`的实现内部或者在`Monitor.Enter`与`try`中间有异常被抛出（可能是因为在线程上调用了`Abort`，或者有`OutOfMemoryException`异常被抛出），这时不一定能够获得锁。如果获得了锁，那么该锁就不会被释放，因为不可能执行到`try / finally`内，这会导致锁泄漏。
 
 为了避免这种危险，CLR 4.0 的设计者为`Monitor.Enter`添加了下面的重载：
 
@@ -183,10 +182,14 @@ public static void Enter (object obj, ref bool lockTaken);
 bool lockTaken = false;
 try
 {
-  Monitor.Enter (_locker, ref lockTaken);
-  // 你的代码...
+    Monitor.Enter (_locker, ref lockTaken);
+    // 你的代码...
 }
-finally { if (lockTaken) Monitor.Exit (_locker); }
+finally
+{ 
+    if (lockTaken) 
+        Monitor.Exit (_locker);
+}
 ```
 
 #### TryEnter
@@ -202,14 +205,14 @@ finally { if (lockTaken) Monitor.Exit (_locker); }
 ```c#
 class ThreadSafe
 {
-  List <string> _list = new List <string>();
-
-  void Test()
-  {
-    lock (_list)
+    List <string> _list = new List <string>();
+    
+    void Test()
     {
-      _list.Add ("Item 1");
-      // ...
+        lock (_list)
+        {
+            _list.Add ("Item 1");
+            // ...
 ```
 
 一个只被用来加锁的字段（例如前面例子中的`_locker`）可以精确控制锁的作用域与粒度。对象自己（`this`），甚至是其类型都可以被当作同步对象来使用：
@@ -1273,7 +1276,7 @@ public class Test
 
 然而，在自动锁机制下，重入有另一个更危险的潜在问题。如果`Synchronization`特性的`reentrant`参数为`true`：
 
-```
+```c#
 [Synchronization(true)]
 ```
 
